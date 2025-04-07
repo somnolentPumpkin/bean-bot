@@ -1,6 +1,12 @@
 const tmi = require("tmi.js");
 const sqlite3 = require("sqlite3").verbose();
+const express = require("express");
 require("dotenv").config({ path: "beth.env" });
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
 
 const db = new sqlite3.Database("bethpoints.db", (err) => {
   if (err) console.error("Database connection error:", err);
@@ -70,7 +76,7 @@ client.on("message", async (channel, userState, message, self) => {
       });
     },
     bethpoints: () => {
-        client.say(channel, (`@${username} Beth Points are arbitrary points that serve no useful purpose. I'll give them out whenever I feel like it (like if someone does something nice for me, or makes me laugh). I might also take them away if it'd be funny at the time. Check your balance with !bp or see the top five leaderboard with !bptop.`))
+      client.say(channel, `@${username} At random points during the stream, Beth may choose to spawn a resource. Use !mine to break rocks, or !chop to chop trees. The resources you collect earn you Beth Points. Check your balance with !bp or see the top five leaderboard with !bptop.`);
     },
     bpadd: () => {
       if (username !== "elizibeth") return;
@@ -89,11 +95,55 @@ client.on("message", async (channel, userState, message, self) => {
       removePoints(targetUser, amount, (err) => {
         if (!err) client.say(channel, `@${targetUser}, lost ${amount} Beth Points.`);
       });
-    },
-    /*vpm: () => {
-        client.say(channel, `@${username} Virtual Pet Monster is the tamagotchi thing on the side of your screen. Available commands: !feed !heal !clean`)
-    }*/
+    }
   };
 
   if (commands[command]) commands[command]();
+});
+
+// Express endpoint to handle game events
+app.post("/event", (req, res) => {
+  let body = "";
+
+  req.on("data", chunk => {
+    body += chunk;
+  });
+
+  req.on("end", () => {
+    console.log("Received raw data:", body || "[no data]");
+
+    let parsed;
+    try {
+      parsed = JSON.parse(body);
+    } catch (err) {
+      console.error("JSON parse error:", err.message);
+      return res.status(400).send("Invalid JSON");
+    }
+
+    const { event, username, amount } = parsed;
+
+    if (!event || !username || typeof amount !== "number") {
+      return res.status(400).send("Missing or invalid fields");
+    }
+
+    if (event === "mine") {
+      addPoints(username, amount, (err) => {
+        if (err) return res.status(500).send("DB error");
+        client.say(process.env.TWITCH_CHANNEL, `@${username} mined a rock and earned ${amount} Beth Point(s)!`);
+        res.send("Points added");
+      });
+    } else if (event === "chop") {
+      addPoints(username, amount, (err) => {
+        if (err) return res.status(500).send("DB error");
+        client.say(process.env.TWITCH_CHANNEL, `@${username} chopped a tree and earned ${amount} Beth Point(s)!`);
+        res.send("Points added");
+      });
+    }else {
+      res.status(400).send("Unknown event");
+    }
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Express server running on port ${PORT}`);
 });

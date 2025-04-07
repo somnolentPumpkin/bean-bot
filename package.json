@@ -11,6 +11,7 @@
   "dependencies": {
     "axios": "^1.8.4",
     "dotenv": "^16.4.7",
+    "express": "^5.1.0",
     "path": "^0.12.7",
     "sqlite3": "^5.1.7",
     "tmi.js": "^1.8.5"
